@@ -1,0 +1,14 @@
+Mushaf — macOS Quran reader
+Source code © 2026 Sohaib Cadri, licensed under the MIT License (see LICENSE).
+
+NOTE ON QURAN CONTENT (not covered by the MIT license):
+
+This application does not bundle or redistribute any Quran page images. The
+Mushaf al-Madinah page scans are produced by the King Fahd Glorious Quran
+Printing Complex and are fetched at runtime from a third-party source
+(https://github.com/sufone/medina-mushaf). The MIT license applies only to the
+source code in this repository. Please respect the rights of the Quran content
+owners. The Quran is sacred scripture; use this tool with adab.
+
+Surah / juz / hizb / rub-al-hizb metadata is derived from the Quran.com API
+(https://api-docs.quran.foundation/).

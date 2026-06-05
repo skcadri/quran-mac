@@ -19,14 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOTE ON QURAN CONTENT (not covered by the MIT license above):
-
-This application does not bundle or redistribute any Quran page images. The
-Mushaf al-Madinah page scans are produced by the King Fahd Glorious Quran
-Printing Complex and are fetched at runtime from a third-party source
-(https://github.com/sufone/medina-mushaf). The MIT license applies only to the
-source code in this repository. Respect the rights of the Quran content
-owners. The Quran is sacred scripture; please use this tool with adab.
