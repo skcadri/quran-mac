@@ -22,6 +22,37 @@ No accounts, no clutter. Open it and read.
 - 🌗 **Light & dark** themes, with a warm parchment palette.
 - 📡 **Offline-friendly** — pages are cached to disk as you read, so revisited pages need no network.
 
+## 🤖 Install with your AI agent (copy-paste)
+
+Paste this into Claude Code, Cursor, or any coding agent on your Mac and it will
+install the app cleanly end-to-end:
+
+```text
+Install the Mushaf macOS Quran reader from https://github.com/skcadri/quran-mac on this Mac:
+
+1. Verify prerequisites: `git --version` and `swift --version` (needs Swift 6+,
+   macOS 14+). If swift is missing, run `xcode-select --install`, wait for it to
+   finish, then re-check.
+2. Clone and build:
+     git clone https://github.com/skcadri/quran-mac.git /tmp/quran-mac-install
+     cd /tmp/quran-mac-install
+     ./build_app.sh
+   This produces an ad-hoc-signed Mushaf.app in the repo folder.
+3. Install it, replacing any older copy:
+     rm -rf /Applications/Mushaf.app
+     mv Mushaf.app /Applications/
+4. Launch and verify:
+     open /Applications/Mushaf.app
+   Confirm the process is alive with `pgrep -x Mushaf` and that no crash report
+   appears in ~/Library/Logs/DiagnosticReports. The window shows a two-page
+   Mushaf spread (internet is needed the first time each page is viewed; pages
+   are cached to ~/Library/Application Support/Mushaf/pages for offline reading).
+5. Clean up: rm -rf /tmp/quran-mac-install
+Only report success after step 4 passes.
+```
+
+That's it — the app ends up in `/Applications` like any other Mac app.
+
 ## Requirements
 
 - macOS 14 (Sonoma) or later
