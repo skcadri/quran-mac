@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mushaf — macOS Quran Reader (Mockup)</title>
+<style>
+  :root{
+    --bg-app:#e9e4d8;           /* desktop behind window */
+    --win:#fbf8f1;             /* window body */
+    --sidebar:#f3efe6;
+    --sidebar-line:#e3ddce;
+    --titlebar:#f0ebe0;
+    --ink:#2b2620;
+    --ink-soft:#7c7464;
+    --ink-faint:#a89f8c;
+    --accent:#1f6b4f;          /* deep green */
+    --accent-soft:#e3efe7;
+    --gold:#b08b3e;
+    --reading-bg:#ddd6c6;      /* the "table" the mushaf rests on */
+    --page-edge:rgba(0,0,0,.18);
+    --shadow:rgba(60,50,30,.28);
+    --row-hover:#ece6d8;
+    --chip:#e7e1d2;
+    --radius:11px;
+  }
+  html[data-theme="dark"]{
+    --bg-app:#15140f;
+    --win:#1c1b16;
+    --sidebar:#201f19;
+    --sidebar-line:#2e2c23;
+    --titlebar:#232219;
+    --ink:#ece6d6;
+    --ink-soft:#a59c87;
+    --ink-faint:#6f6757;
+    --accent:#5db98e;
+    --accent-soft:#1e2f27;
+    --gold:#cfa84e;
+    --reading-bg:#100f0b;
+    --page-edge:rgba(0,0,0,.6);
+    --shadow:rgba(0,0,0,.6);
+    --row-hover:#2a281f;
+    --chip:#2c2a20;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(255,255,255,.25), transparent 60%),
+      var(--bg-app);
+    height:100vh;display:flex;align-items:center;justify-content:center;
+    color:var(--ink);overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    transition:background .4s ease;
+  }
+  /* ---------- window ---------- */
+  .window{
+    width:min(1180px,94vw);height:min(760px,92vh);
+    background:var(--win);border-radius:14px;overflow:hidden;
+    display:flex;flex-direction:column;
+    box-shadow:0 40px 90px -20px rgba(0,0,0,.5), 0 0 0 .5px rgba(0,0,0,.12);
+    transition:background .4s ease;
+  }
+  .titlebar{
+    height:46px;flex:0 0 46px;background:var(--titlebar);
+    display:flex;align-items:center;padding:0 16px;gap:14px;
+    border-bottom:.5px solid var(--sidebar-line);
+    position:relative;user-select:none;
+  }
+  .traffic{display:flex;gap:8px}
+  .traffic span{width:12px;height:12px;border-radius:50%}
+  .t-red{background:#ff5f57}.t-yellow{background:#febc2e}.t-green{background:#28c840}
+  .title{
+    position:absolute;left:0;right:0;text-align:center;
+    font-size:13px;font-weight:600;color:var(--ink-soft);pointer-events:none;
+    letter-spacing:.2px;
+  }
+  .title b{color:var(--ink)}
+  .tb-actions{margin-left:auto;display:flex;gap:6px;z-index:2}
+  .tb-btn{
+    width:30px;height:26px;border-radius:7px;border:none;background:transparent;
+    color:var(--ink-soft);font-size:15px;cursor:pointer;display:grid;place-items:center;
+    transition:background .15s,color .15s;
+  }
+  .tb-btn:hover{background:var(--row-hover);color:var(--ink)}
+  .tb-btn.active{background:var(--accent-soft);color:var(--accent)}
+
+  /* ---------- body split ---------- */
+  .body{flex:1;display:flex;min-height:0}
+  /* ---------- sidebar ---------- */
+  .sidebar{
+    width:298px;flex:0 0 298px;background:var(--sidebar);
+    border-right:.5px solid var(--sidebar-line);
+    display:flex;flex-direction:column;min-height:0;
+    transition:margin-left .28s ease, background .4s ease;
+  }
+  .sidebar.collapsed{margin-left:-298px}
+  .search-wrap{padding:12px 12px 8px}
+  .search{
+    display:flex;align-items:center;gap:7px;background:var(--win);
+    border:.5px solid var(--sidebar-line);border-radius:8px;padding:6px 9px;
+  }
+  .search input{
+    border:none;background:transparent;outline:none;flex:1;font-size:13px;color:var(--ink);
+  }
+  .search svg{flex:0 0 14px;color:var(--ink-faint)}
+  .seg{display:flex;gap:4px;padding:0 12px 8px}
+  .seg button{
+    flex:1;font-size:12px;font-weight:600;padding:5px;border-radius:7px;border:none;
+    background:var(--chip);color:var(--ink-soft);cursor:pointer;transition:.15s;
+  }
+  .seg button.active{background:var(--accent);color:#fff}
+  .list{flex:1;overflow-y:auto;padding:4px 8px 12px}
+  .list::-webkit-scrollbar{width:9px}
+  .list::-webkit-scrollbar-thumb{background:var(--sidebar-line);border-radius:8px;border:2px solid var(--sidebar)}
+  .row{
+    display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:9px;cursor:pointer;
+    transition:background .12s;
+  }
+  .row:hover{background:var(--row-hover)}
+  .row.active{background:var(--accent-soft)}
+  .row.active .r-en{color:var(--accent)}
+  .badge{
+    flex:0 0 30px;height:30px;display:grid;place-items:center;position:relative;
+    font-size:11px;font-weight:700;color:var(--accent);
+  }
+  .badge svg{position:absolute;inset:0;width:30px;height:30px;color:var(--gold);opacity:.55}
+  .row.active .badge svg{opacity:.9}
+  .r-mid{flex:1;min-width:0}
+  .r-en{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.2}
+  .r-meta{font-size:11px;color:var(--ink-faint);margin-top:1px}
+  .r-ar{
+    font-family:"Geeza Pro","Al Bayan","Noto Naskh Arabic",serif;
+    font-size:18px;color:var(--ink-soft);direction:rtl;
+  }
+  .row.active .r-ar{color:var(--accent)}
+
+  /* ---------- reading area ---------- */
+  .reader{
+    flex:1;display:flex;flex-direction:column;min-width:0;
+    background:
+      radial-gradient(900px 500px at 50% 30%, rgba(255,255,255,.06), transparent 70%),
+      var(--reading-bg);
+    transition:background .4s ease;
+  }
+  .reader-top{
+    height:40px;flex:0 0 40px;display:flex;align-items:center;justify-content:center;gap:10px;
+    color:var(--ink-soft);font-size:12.5px;font-weight:600;letter-spacing:.3px;
+  }
+  .reader-top .dot{width:3px;height:3px;border-radius:50%;background:var(--ink-faint)}
+  .spread-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:6px 30px 14px;min-height:0}
+  .spread{
+    height:100%;display:flex;align-items:stretch;gap:0;
+    filter:drop-shadow(0 22px 30px var(--shadow));
+    max-width:100%;
+  }
+  .page{
+    position:relative;height:100%;background:#fff;display:flex;
+    border-top:1px solid var(--page-edge);border-bottom:1px solid var(--page-edge);
+  }
+  .page img{height:100%;width:auto;display:block;max-width:100%;object-fit:contain;background:#fdfcf7}
+  .page.left{border-radius:3px 0 0 3px;border-left:1px solid var(--page-edge)}
+  .page.right{border-radius:0 3px 3px 0;border-right:1px solid var(--page-edge)}
+  .page.single{border-radius:3px;border-left:1px solid var(--page-edge);border-right:1px solid var(--page-edge)}
+  /* gutter shadow between the two pages */
+  .gutter{width:0}
+  .page.left::after,.page.right::after{
+    content:"";position:absolute;top:0;bottom:0;width:26px;pointer-events:none;
+  }
+  .page.left::after{left:0;background:linear-gradient(90deg,rgba(0,0,0,.22),transparent)}
+  .page.right::after{right:0;background:linear-gradient(-90deg,rgba(0,0,0,.22),transparent)}
+  .pg-num{
+    position:absolute;bottom:-22px;font-size:11px;color:var(--ink-faint);width:100%;text-align:center;
+  }
+  .spread.turning{opacity:.25;transform:scale(.985);transition:opacity .12s, transform .12s}
+  .spread{transition:opacity .22s ease, transform .22s ease}
+
+  /* loading shimmer */
+  .page.loading img{opacity:0}
+  .page.loading::before{
+    content:"";position:absolute;inset:0;background:linear-gradient(110deg,#f3efe6 30%,#e8e2d4 50%,#f3efe6 70%);
+    background-size:200% 100%;animation:sh 1.2s infinite;
+  }
+  @keyframes sh{to{background-position:-200% 0}}
+
+  /* ---------- bottom bar ---------- */
+  .controls{
+    height:62px;flex:0 0 62px;background:var(--titlebar);
+    border-top:.5px solid var(--sidebar-line);
+    display:flex;align-items:center;gap:14px;padding:0 22px;
+  }
+  .nav-btn{
+    width:38px;height:38px;border-radius:10px;border:.5px solid var(--sidebar-line);
+    background:var(--win);color:var(--ink);font-size:17px;cursor:pointer;
+    display:grid;place-items:center;transition:.15s;
+  }
+  .nav-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .nav-btn:active{transform:scale(.94)}
+  .scrub{flex:1;display:flex;flex-direction:column;gap:3px}
+  .scrub-top{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-faint)}
+  input[type=range]{
+    -webkit-appearance:none;width:100%;height:4px;border-radius:4px;
+    background:var(--sidebar-line);outline:none;direction:rtl;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+  .pageinfo{
+    min-width:120px;text-align:center;font-size:13px;font-weight:600;color:var(--ink);
+  }
+  .pageinfo small{display:block;font-size:10.5px;font-weight:500;color:var(--ink-faint);margin-top:1px}
+  .bookmark{font-size:18px}
+  .bookmark.on{color:var(--gold)}
+  .hint{
+    position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+    font-size:10.5px;color:var(--ink-faint);background:var(--win);
+    padding:3px 10px;border-radius:20px;border:.5px solid var(--sidebar-line);
+    opacity:.0;transition:opacity .3s;pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div class="window">
+  <!-- title bar -->
+  <div class="titlebar">
+    <div class="traffic"><span class="t-red"></span><span class="t-yellow"></span><span class="t-green"></span></div>
+    <div class="title"><b>Mushaf</b> &nbsp;·&nbsp; <span id="title-surah">Al-Fatihah</span></div>
+    <div class="tb-actions">
+      <button class="tb-btn" id="btn-sidebar" title="Toggle sidebar">☰</button>
+      <button class="tb-btn active" id="btn-spread" title="Two-page spread">▭▭</button>
+      <button class="tb-btn" id="btn-theme" title="Toggle light / dark">☾</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="search-wrap">
+        <div class="search">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
+          <input id="search" placeholder="Search surah…">
+        </div>
+      </div>
+      <div class="seg">
+        <button class="active" data-mode="surah">Surahs</button>
+        <button data-mode="juz">Juz</button>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+
+    <!-- reader -->
+    <main class="reader">
+      <div class="reader-top" id="reader-top">Juz 1 <span class="dot"></span> Al-Fatihah <span class="dot"></span> Makkah</div>
+      <div class="spread-wrap">
+        <div class="spread" id="spread"></div>
+      </div>
+      <div class="hint" id="hint">← / → to turn pages</div>
+    </main>
+  </div>
+
+  <!-- bottom controls -->
+  <div class="controls">
+    <button class="nav-btn" id="prev" title="Previous (→)">›</button>
+    <button class="bookmark tb-btn" id="bookmark" title="Bookmark this page">☆</button>
+    <div class="scrub">
+      <div class="scrub-top"><span>Page 604</span><span>Page 1</span></div>
+      <input type="range" id="range" min="1" max="604" value="1">
+    </div>
+    <div class="pageinfo" id="pageinfo">Page 1<small>Juz 1 · Hizb 1</small></div>
+    <button class="nav-btn" id="next" title="Next (←)">‹</button>
+  </div>
+</div>
+
+<script src="surahs.js"></script>
+<script>
+const IMG = n => `https://raw.githubusercontent.com/sufone/medina-mushaf/master/png-d150/${n}.png`;
+const JUZ_START=[1,22,42,62,82,102,121,142,162,182,201,222,242,262,282,302,322,342,362,382,402,422,442,462,482,502,522,542,562,582];
+const juzOf = p => { let j=1; for(let i=0;i<30;i++){ if(p>=JUZ_START[i]) j=i+1; } return j; };
+const surahOf = p => { let s=SURAHS[0]; for(const x of SURAHS){ if(x.page<=p) s=x; } return s; };
+
+let current = 1;            // current "primary" page (right page of spread)
+let spreadMode = true;
+let bookmarks = new Set();
+
+const $ = id => document.getElementById(id);
+const spread=$('spread'), rangeEl=$('range'), listEl=$('list');
+
+/* ---- build the spread ---- */
+function pagesForSpread(p){
+  // page 1 shown alone; otherwise right=lower even page, left=odd page+1
+  if(p===1) return {right:1,left:null};
+  const right = p%2===0 ? p : p-1;     // even page on the right
+  return {right, left: right+1<=604 ? right+1 : null};
+}
+function makePage(n,cls){
+  if(n===null){ const d=document.createElement('div'); d.className='page '+cls; d.style.visibility='hidden'; d.innerHTML='<img>'; return d; }
+  const d=document.createElement('div'); d.className='page '+cls+' loading';
+  const img=new Image(); img.onload=()=>d.classList.remove('loading'); img.src=IMG(n);
+  d.appendChild(img);
+  const num=document.createElement('div'); num.className='pg-num'; num.textContent=n; d.appendChild(num);
+  return d;
+}
+function render(){
+  spread.classList.add('turning');
+  setTimeout(()=>{
+    spread.innerHTML='';
+    if(!spreadMode){
+      spread.appendChild(makePage(current,'single'));
+    }else{
+      const {right,left}=pagesForSpread(current);
+      if(left!==null) spread.appendChild(makePage(left,'left'));
+      spread.appendChild(makePage(right,'right'));
+      if(left===null && right===1){ /* fatiha alone, center */ }
+    }
+    spread.classList.remove('turning');
+    // preload neighbours
+    [current-2,current+2,current+3].forEach(n=>{if(n>=1&&n<=604)new Image().src=IMG(n);});
+  },120);
+
+  const su=surahOf(current), jz=juzOf(current);
+  $('title-surah').textContent=su.en;
+  $('reader-top').innerHTML=`Juz ${jz} <span class="dot"></span> ${su.en} <span class="dot"></span> ${su.place[0].toUpperCase()+su.place.slice(1)}`;
+  $('pageinfo').innerHTML=`Page ${current}<small>Juz ${jz} · ${su.ar}</small>`;
+  rangeEl.value=current;
+  $('bookmark').className='bookmark tb-btn'+(bookmarks.has(current)?' on':'');
+  $('bookmark').textContent=bookmarks.has(current)?'★':'☆';
+  // highlight active surah
+  document.querySelectorAll('.row').forEach(r=>r.classList.toggle('active', +r.dataset.surah===su.n));
+}
+function go(p){ current=Math.max(1,Math.min(604,p)); render(); }
+// RTL: "next" in reading order = higher page number = move LEFT visually
+function next(){ go(current + (current===1?1:2)); }
+function prev(){ go(current<=1?1:(current<=3?1:current-2)); }
+
+/* ---- sidebar list ---- */
+const badgeSVG='<svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M15 2l4.6 1.9 4.9.0 0 4.9 1.9 4.6-1.9 4.6 0 4.9-4.9 0-4.6 1.9-4.6-1.9-4.9 0 0-4.9L3.5 15l1.9-4.6 0-4.9 4.9 0z"/></svg>';
+function buildSurahList(filter=''){
+  listEl.innerHTML='';
+  SURAHS.filter(s=>{
+    const q=filter.toLowerCase();
+    return !q || s.en.toLowerCase().includes(q)||s.tr.toLowerCase().includes(q)||String(s.n)===q||s.ar.includes(filter);
+  }).forEach(s=>{
+    const row=document.createElement('div'); row.className='row'; row.dataset.surah=s.n;
+    row.innerHTML=`<div class="badge">${badgeSVG}<span>${s.n}</span></div>
+      <div class="r-mid"><div class="r-en">${s.en}</div>
+      <div class="r-meta">${s.tr} · ${s.ayah} ayah · ${s.place}</div></div>
+      <div class="r-ar">${s.ar}</div>`;
+    row.onclick=()=>go(s.page);
+    listEl.appendChild(row);
+  });
+}
+function buildJuzList(){
+  listEl.innerHTML='';
+  for(let j=1;j<=30;j++){
+    const p=JUZ_START[j-1], su=surahOf(p);
+    const row=document.createElement('div'); row.className='row';
+    row.innerHTML=`<div class="badge">${badgeSVG}<span>${j}</span></div>
+      <div class="r-mid"><div class="r-en">Juz ${j}</div>
+      <div class="r-meta">starts p.${p} · ${su.en}</div></div>`;
+    row.onclick=()=>go(p);
+    listEl.appendChild(row);
+  }
+}
+
+/* ---- wiring ---- */
+$('next').onclick=next; $('prev').onclick=prev;
+rangeEl.oninput=e=>go(+e.target.value);
+$('bookmark').onclick=()=>{bookmarks.has(current)?bookmarks.delete(current):bookmarks.add(current);render();};
+$('btn-sidebar').onclick=()=>$('sidebar').classList.toggle('collapsed');
+$('btn-spread').onclick=function(){spreadMode=!spreadMode;this.classList.toggle('active',spreadMode);this.textContent=spreadMode?'▭▭':'▭';render();};
+$('btn-theme').onclick=function(){
+  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme',dark?'light':'dark');
+  this.textContent=dark?'☾':'☀';
+};
+$('search').oninput=e=>buildSurahList(e.target.value);
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=function(){
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('active'));
+  this.classList.add('active');
+  this.dataset.mode==='surah'?buildSurahList():buildJuzList();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft')next();        // RTL forward
+  if(e.key==='ArrowRight')prev();
+});
+// show hint briefly
+setTimeout(()=>{$('hint').style.opacity=.9;setTimeout(()=>$('hint').style.opacity=0,2600);},700);
+
+buildSurahList(); render();
+</script>
+</body>
+</html>

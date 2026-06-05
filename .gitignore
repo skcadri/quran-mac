@@ -1,0 +1,11 @@
+# Swift / SwiftPM
+.build/
+.swiftpm/
+DerivedData/
+
+# Built app bundle (produced by build_app.sh)
+Mushaf.app/
+
+# macOS
+.DS_Store
+.gstack/
