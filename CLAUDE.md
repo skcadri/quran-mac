@@ -9,6 +9,11 @@ Native **SwiftUI** app (chosen over Tauri/Electron). Displays the real **Mushaf 
 604-page scans as a right-to-left two-page spread. Swift 6 toolchain, Swift 5 language mode
 (set in `Package.swift` — keep it; Swift 6 strict-concurrency churn isn't worth it here).
 
+## App icon
+- Source of truth is `design/icon.html` (inline SVG; green Mushaf cover + gold rub-el-hizb star + open book).
+- Regenerate: extract the `<svg>` to `design/icon.svg`, render with `qlmanage -t -s 1024 -o design design/icon.svg` (**not** a browser screenshot — that loses alpha and Finder shows a white tile), then `sips`-resize into an `AppIcon.iconset` and `iconutil -c icns` → `design/AppIcon.icns`.
+- `build_app.sh` copies `design/AppIcon.icns` into the bundle and sets `CFBundleIconFile`.
+
 ## Build & run
 - `./build_app.sh` → builds release + wraps into `Mushaf.app` (ad-hoc signed). Then `open Mushaf.app`.
 - `swift build` for a quick compile check; `swift run` launches a bare window (no dock identity — use the .app for fullscreen testing).
