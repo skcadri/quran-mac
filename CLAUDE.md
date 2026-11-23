@@ -37,6 +37,12 @@ Both features key off bundled **scan-aligned ayah boxes** (`MushafData`). `PageV
   2. **Text lines** detected by horizontal ink projection, then **tiny header/footer bands dropped and merged double-bands split** at their interior minimum (the mushaf is 15 lines; bands must end up ~one line tall or rects merge across lines).
   3. On **surah-start pages**, drop the ornamental **header band** (high ink-density, ~0.14) and **basmala band** (low density, ~0.05) so they aren't swallowed into the first ayah's box.
   4. Each ayah's region = the text flowing right-to-left/top-to-bottom **between consecutive medallions**, as per-line rects, **clamped to the per-parity text block** (odd `x∈[67,1044]`, even `x∈[195,1172]` — odd/even differ by the gutter margin) so nothing spills into the decorative border.
+  - **Word-level layout (not built yet):** these scans follow the **QCF V2 / 1421 layout** — Quran.com
+    `https://api.qurancdn.com/api/qdc/verses/by_page/<p>?words=true&word_fields=line_number,code_v2&mushaf=1`
+    reproduces their line breaks (checked p.3, p.562). Trap: `api.quran.com/api/v4` **ignores `mushaf`** and returns
+    the 1405 layout (that's the mismatch noted above). Word x-positions = QCF V2 page-font glyph advances
+    (`verses.quran.foundation/fonts/quran/hafs/v2/woff2/p<p>.woff2`, one glyph per word, lines sum to ~equal width)
+    scaled onto each scan line's ink extent; a spike placed every word and medallion correctly on both pages.
   - Validation: every page's medallion count is checked against its expected ayah count. Markers are numbered by matching reading-order to the page's ordered `(surah,ayah)` list (handles multi-surah pages like 604).
 - Read bundled resources via **`Bundle.resources`** (in `MushafData.swift`), **never `Bundle.module`**: SwiftPM's accessor only checks next to the `.app` and the absolute build folder, so an app copied to /Applications crashes (`fatalError`) once that folder is gone. `build_app.sh` copies `Mushaf_Mushaf.bundle` into `Contents/Resources`, which `Bundle.resources` checks first.
 
