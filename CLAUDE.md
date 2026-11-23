@@ -24,33 +24,27 @@ Native **SwiftUI** app (chosen over Tauri/Electron). Displays the real **Mushaf 
 - `PageStore` loads in this order: bundled `Pages/<n>.png` → on-disk cache (`~/Library/Application Support/Mushaf/pages/`) → network download (then cached). So the app runs immediately and goes offline as pages are visited.
 - **For a true offline build**: drop a `Pages/` resource folder of all 604 (downscale first — full d150 set is ~1.1 GB; target ~150–250 MB) and add it to the target resources. `PageStore.bundledURL` already looks for it.
 
-## Ayah overlays — translation, memorization & recite (all on the scans)
-Both features key off bundled **scan-aligned ayah boxes** (`MushafData`). `PageView` aspect-fits the 1240×1754 scan (`pageAspect`/`fittedRect`) and maps the normalized rects onto it.
+## Overlays on the scans — translation, memorization & recite
+All overlays key off bundled **scan-aligned word boxes** (`MushafData`; ayah boxes are derived from them — union of
+an ayah's words per line). `PageView` aspect-fits the 1240×1754 scan (`pageAspect`/`fittedRect`) and maps the
+normalized rects onto it. Every page has them, including the Al-Fatihah disc on pages 1–2.
 - **Translation mode** — top-bar **character.bubble** button → `Reader.toggleTranslate()`, persisted as `translateMode`. Hover an ayah: `.onContinuousHover` → `MushafData.ayah(onPage:at:)` → highlight its per-line gold rects; the translation shows in a **tooltip bubble beside the ayah** (rendered in `ReaderView`, offset toward the opposite page, tail pointing back, scaled to the line height). The scan is untouched; off = original app.
   - The bubble is **interactive**: a 0.2s grace delay (`Reader.setHover`/`scheduleClearHover`/`cancelClearHover`) lets you mouse onto it; its text is `.textSelection(.enabled)`; the header has **Google** (`magnifyingglass`) and **Claude** (`sparkles`) buttons that `NSWorkspace.open` a search / `claude.ai/new?q=` prompt for that ayah (reference only). Hover state lives on `Reader` (`AyahHover`, positioned in the named `"spread"` coordinate space) so it's correct in windowed/fullscreen/sidebar layouts.
-- **Memorization mode** — top-bar **eye.slash** button → `Reader.toggleMemorize()` (`memorizeMode`, not persisted — it's a per-session study tool). Each ayah's text is covered with opaque `Palette.pageCover`; **click an ayah to reveal/re-hide** it (`Reader.toggleReveal`, tracked in `Reader.revealed`). Leaving the mode clears reveals.
-- **Data is bundled, generated, do-not-hand-edit** (`Sources/Mushaf/Resources/`, read via `Bundle.module`):
-  - `boxes.json` — `{ "<page>": [ {s,a,r:[[x,y,w,h],…]} ] }`, rects **normalized 0…1** in the **scan** (1240×1754) space, one rect per line an ayah occupies. **Pages 1–2 are intentionally absent** (Al-Fatihah's decorative oval defeats the line-calibration; overlays simply don't activate there).
+- **Memorization mode** — top-bar **eye.slash** button → `Reader.toggleMemorize()` (`memorizeMode`, not persisted — it's a per-session study tool). Text is covered with opaque `Palette.pageCover`: each line's runs of still-hidden words, merged (`PageView.covers`). **Click an ayah to reveal/re-hide** all of it (`Reader.toggleReveal` → `Reader.revealed`); reciting uncovers it **word by word** (`Reader.revealedThrough`). A medallion shows only once its whole ayah is revealed. Leaving the mode clears both.
+- **Data is bundled, generated, do-not-hand-edit** (`Sources/Mushaf/Resources/`):
+  - `words.json` — `{ "<page>": [ {y,h,w:[[surah,ayah,word,x,width],…]} ] }`, one entry per text line, words in
+    reading order, **normalized 0…1** in the **scan** space. `word` is tilawa's engine index (0 = the ayah's
+    medallion). Bands span nearly the whole line pitch so covers hide tall letters and vowel marks. Regenerate
+    with `tools/wordgen` (its CLAUDE.md has the rules and the checks a run must pass).
   - `translations.json` — `{ "<surah>:<ayah>": "English" }`, Saheeh International (via quran-json / Tanzil). Non-commercial; credit Tanzil/QUL if distributing.
-- **How the boxes are generated** (one-time, offline; not in the app): a **from-scratch CV pipeline on the sufone scans themselves** — NOT mapped from any external glyph database. (Quran.com's `ayahinfo_1260.db` was tried and abandoned: it's a *different edition* with different line breaks — e.g. it puts al-Baqarah 12 on its own line while these scans wrap it — so its geometry never matches. Don't reach for it again.) The pipeline:
-  1. **Ayah medallions** (which mark exactly where each ayah ends, in *this* edition) found by **multi-scale template matching** (`cv2.matchTemplate`, TM_CCOEFF_NORMED, scales 0.8–1.2) of one medallion template against the page; the medallion's ornate ring scores far above round Arabic letters. Take exactly **N** strongest, where N = ayahs ending on the page (from page→ayah metadata, standardized at the page level).
-  2. **Text lines** detected by horizontal ink projection, then **tiny header/footer bands dropped and merged double-bands split** at their interior minimum (the mushaf is 15 lines; bands must end up ~one line tall or rects merge across lines).
-  3. On **surah-start pages**, drop the ornamental **header band** (high ink-density, ~0.14) and **basmala band** (low density, ~0.05) so they aren't swallowed into the first ayah's box.
-  4. Each ayah's region = the text flowing right-to-left/top-to-bottom **between consecutive medallions**, as per-line rects, **clamped to the per-parity text block** (odd `x∈[67,1044]`, even `x∈[195,1172]` — odd/even differ by the gutter margin) so nothing spills into the decorative border.
-  - **Word-level layout (not built yet):** these scans follow the **QCF V2 / 1421 layout** — Quran.com
-    `https://api.qurancdn.com/api/qdc/verses/by_page/<p>?words=true&word_fields=line_number,code_v2&mushaf=1`
-    reproduces their line breaks (checked p.3, p.562). Trap: `api.quran.com/api/v4` **ignores `mushaf`** and returns
-    the 1405 layout (that's the mismatch noted above). Word x-positions = QCF V2 page-font glyph advances
-    (`verses.quran.foundation/fonts/quran/hafs/v2/woff2/p<p>.woff2`, one glyph per word, lines sum to ~equal width)
-    scaled onto each scan line's ink extent; a spike placed every word and medallion correctly on both pages.
-  - Validation: every page's medallion count is checked against its expected ayah count. Markers are numbered by matching reading-order to the page's ordered `(surah,ayah)` list (handles multi-surah pages like 604).
+- No ayah crosses a page in this mushaf: `MushafData.page(surah:ayah:)` is exact.
 - Read bundled resources via **`Bundle.resources`** (in `MushafData.swift`), **never `Bundle.module`**: SwiftPM's accessor only checks next to the `.app` and the absolute build folder, so an app copied to /Applications crashes (`fatalError`) once that folder is gone. `build_app.sh` copies `Mushaf_Mushaf.bundle` into `Contents/Resources`, which `Bundle.resources` checks first.
 
 ## Recite mode — tilawa listening (`Recitation`, `TilawaEngine`, `RecitationHUD`)
-Mic button / **R** → `Recitation.toggle()`. You recite from memory; the app follows on the scans: the current
-ayah gets a green outline, pages turn by themselves, mistakes get a maroon underline under the ayah's lines, and
-the HUD (below the spread, in the layout — never floating over the page) shows status, the current ayah's words
-**up to the one just said** (never ahead: it's a hifz aid) and an end-of-take summary.
+Mic button / **R** → `Recitation.toggle()`. You recite from memory; the app follows on the scans: the word you're
+on gets a green outline, pages turn by themselves, mistakes get a maroon underline under the exact word, and the
+HUD (below the spread, in the layout — never floating over the page) shows status and an end-of-take summary.
+Don't put the recited words back in the HUD — they're on the page now.
 - **Engine = [tilawa](https://github.com/yazinsai/tilawa) `@tilawa/core`, unmodified, in a hidden WKWebView.**
   Don't port it to Swift (≈5k lines of tracker/checker) — reuse it. Swift owns: assets, mic, UI. JS owns: the engine.
   - `TilawaEngine` downloads pinned, immutable tilawa.dev/v1 assets (model 68 MB, `ref-v2.json`, onnxruntime-web
@@ -60,14 +54,13 @@ the HUD (below the spread, in the layout — never floating over the page) shows
   - Audio: `AVAudioEngine` input tap (raw, no voice processing) → `AVAudioConverter` to 16 kHz mono →
     base64 → `tilawaBridge.push`. Requires `NSMicrophoneUsageDescription` (in `build_app.sh`).
   - Always `startFreeRecitation` (the engine finds your place anywhere), never a declared passage — passages are
-    single-surah and break on multi-surah spreads. Only a `locked` position moves the outline / turns the page.
+    single-surah and break on multi-surah spreads. Only a `locked` position moves the outline / reveals words / turns the page.
   - Memory: the WebContent process holds several hundred MB (JSC lets it balloon to GBs on big-RAM Macs). The
     engine stays warm 5 min after a take, then `TilawaEngine.unload()` drops the web view. Cold load ≈1.5 s.
-- **Word ↔ page:** we have ayah boxes, not word boxes. `MushafData.page(surah:ayah:word:of:)` picks the page for
-  an ayah that crosses a page break by its share of line width. Pages 1–2 (no boxes) are hard-coded.
-  Word text for the HUD comes from tilawa's own `ref-v2.json` (`w`), so word indices always agree with the engine.
-- **Memorization + recite:** an ayah is revealed (`Reader.reveal`) when its last word is recited or the reciter
-  moves on to a later ayah.
+- **Word ↔ scan:** `MushafData.word(surah:ayah:word:)` takes tilawa's word index straight from engine events
+  (`words.json` is numbered the same way). Word text for the summary comes from tilawa's `ref-v2.json` (`w`).
+- **Memorization + recite:** each locked word uncovers its ayah up to that word (`Reader.reveal(…through:)`, never
+  ahead); the whole ayah, medallion included, is revealed when its last word is recited or the reciter moves on.
 - Copy for mistakes is tilawa's own non-judgmental wording (`Mistake.wording`). Credit line in the summary
   ("Listening by Tilawa (tilawa.dev)") is required by the model's CC BY 4.0 licence — keep it.
 - **Testing without a mic or screen recording** (agents): launch the binary directly with env vars —

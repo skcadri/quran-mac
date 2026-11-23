@@ -1,27 +1,39 @@
 import Foundation
 import CoreGraphics
 
-/// One ayah's footprint on a page: its per-line rectangles, normalized 0…1 in the
-/// sufone scan (1240×1754) space. An ayah wraps lines, so `rects`
-/// usually has more than one rectangle.
+/// One printed word, or an ayah's end medallion, on a scan. `rect` is normalized 0…1 in the sufone scan
+/// (1240×1754) space. `word` is tilawa's 1-based word index — the first engine word it shows, since a few
+/// printed words count as two (بَعْدَمَا) — and 0 for the medallion.
+struct WordBox {
+    let surah: Int
+    let ayah: Int
+    let word: Int
+    let rect: CGRect
+    var isMedallion: Bool { word == 0 }
+}
+
+/// One ayah's footprint on a page: its per-line rectangles (normalized, like `WordBox`). An ayah wraps
+/// lines, so `rects` usually has more than one rectangle. Derived from the word boxes.
 struct AyahBox {
     let surah: Int
     let ayah: Int
     let rects: [CGRect]
 }
 
-/// Bundled ayah-position boxes + English (Saheeh International) translations.
-/// `boxes.json` is generated from the scans themselves by `tools/boxgen` (see CLAUDE.md).
+/// Bundled word positions + English (Saheeh International) translations.
+/// `words.json` is generated from the scans by `tools/wordgen` (see its CLAUDE.md); ayah boxes derive from it.
 @MainActor
 final class MushafData {
     static let shared = MushafData()
 
+    /// page → text lines → words in reading order (right to left).
+    private var linesByPage: [Int: [[WordBox]]] = [:]
     private var boxesByPage: [Int: [AyahBox]] = [:]
+    /// "s:a" → the page an ayah is on (no ayah crosses a page in this mushaf) and its words, in order.
+    private var ayahWords: [String: (page: Int, words: [WordBox])] = [:]
     private var translations: [String: String] = [:]
-    /// "s:a" → the pages an ayah appears on (ascending) with its total line width there.
-    private var footprint: [String: [(page: Int, width: CGFloat)]] = [:]
 
-    private struct RawBox: Decodable { let s: Int; let a: Int; let r: [[Double]] }
+    private struct RawLine: Decodable { let y: Double; let h: Double; let w: [[Double]] }   // w: [s, a, word, x, width]
 
     private init() {
         if let url = Bundle.resources.url(forResource: "translations", withExtension: "json"),
@@ -29,59 +41,62 @@ final class MushafData {
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             translations = dict
         }
-        if let url = Bundle.resources.url(forResource: "boxes", withExtension: "json"),
-           let data = try? Data(contentsOf: url),
-           let raw = try? JSONDecoder().decode([String: [RawBox]].self, from: data) {
-            for (key, arr) in raw {
-                guard let page = Int(key) else { continue }
-                boxesByPage[page] = arr.map { b in
-                    AyahBox(surah: b.s, ayah: b.a,
-                            rects: b.r.map { CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) })
+        guard let url = Bundle.resources.url(forResource: "words", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let raw = try? JSONDecoder().decode([String: [RawLine]].self, from: data) else { return }
+        for (key, rawLines) in raw {
+            guard let page = Int(key) else { continue }
+            let lines = rawLines.map { line in
+                line.w.map { w in
+                    WordBox(surah: Int(w[0]), ayah: Int(w[1]), word: Int(w[2]),
+                            rect: CGRect(x: w[3], y: line.y, width: w[4], height: line.h))
                 }
             }
-            for page in boxesByPage.keys.sorted() {
-                for box in boxesByPage[page]! {
-                    footprint["\(box.surah):\(box.ayah)", default: []].append((page, box.rects.reduce(0) { $0 + $1.width }))
+            linesByPage[page] = lines
+            // An ayah's rect on a line is the union of its words there.
+            var order: [String] = []
+            var rects: [String: [CGRect]] = [:]
+            for line in lines {
+                var onLine: [String: CGRect] = [:]
+                var lineOrder: [String] = []
+                for w in line {
+                    let k = "\(w.surah):\(w.ayah)"
+                    if onLine[k] == nil { lineOrder.append(k) }
+                    onLine[k] = onLine[k].map { $0.union(w.rect) } ?? w.rect
+                    ayahWords[k, default: (page, [])].words.append(w)
                 }
+                for k in lineOrder {
+                    if rects[k] == nil { order.append(k) }
+                    rects[k, default: []].append(onLine[k]!)
+                }
+            }
+            boxesByPage[page] = order.map { k in
+                let w = ayahWords[k]!.words[0]
+                return AyahBox(surah: w.surah, ayah: w.ayah, rects: rects[k]!)
             }
         }
     }
 
-    /// All ayahs with a footprint on this page (empty for pages 1–2, which have none).
+    /// All ayahs with a footprint on this page, in reading order.
     func ayahs(onPage page: Int) -> [AyahBox] { boxesByPage[page] ?? [] }
 
-    /// The ayah whose any line-rect contains the normalized point, if any.
-    ///
-    /// Each line-rect is tight to the glyphs (~0.037 tall) but the lines sit on a
-    /// ~0.051 pitch, so there's a ~0.014 dead band between consecutive lines where a
-    /// strict `contains` matches nothing and the translation flickers as the cursor
-    /// crosses it. We inflate each rect vertically by half the gap so adjacent lines
-    /// meet at the midpoint between them — no dead zone — while leaving the horizontal
-    /// extent (and the page margins / empty areas) untouched.
-    private static let lineHitPad: CGFloat = 0.008  // ≈ half the inter-line gap, in normalized page height
+    /// The page's text lines, each a run of words in reading order.
+    func lines(onPage page: Int) -> [[WordBox]] { linesByPage[page] ?? [] }
+
+    /// The ayah whose any line-rect contains the normalized point, if any. Line bands span nearly the whole
+    /// line pitch, so the cursor never falls in a gap between lines.
     func ayah(onPage page: Int, at p: CGPoint) -> AyahBox? {
-        boxesByPage[page]?.first { box in
-            box.rects.contains { $0.insetBy(dx: 0, dy: -Self.lineHitPad).contains(p) }
-        }
+        boxesByPage[page]?.first { box in box.rects.contains { $0.contains(p) } }
     }
 
-    /// The page showing word `word` (1-based, of `count`) of an ayah. An ayah that crosses a page break is
-    /// split by its share of line width on each page (we have ayah boxes, not word boxes). Pages 1–2 have no
-    /// boxes, so Al-Fatihah → 1 and al-Baqarah 1–5 → 2 are hard-coded.
-    func page(surah: Int, ayah: Int, word: Int, of count: Int) -> Int? {
-        guard let parts = footprint["\(surah):\(ayah)"], let last = parts.last else {
-            if surah == 1 { return 1 }
-            if surah == 2 && ayah <= 5 { return 2 }
-            return nil
-        }
-        let total = parts.reduce(0) { $0 + $1.width }
-        let target = total * (CGFloat(word) - 0.5) / CGFloat(max(count, 1))
-        var acc: CGFloat = 0
-        for part in parts {
-            acc += part.width
-            if target <= acc { return part.page }
-        }
-        return last.page
+    /// The page an ayah is printed on.
+    func page(surah: Int, ayah: Int) -> Int? { ayahWords["\(surah):\(ayah)"]?.page }
+
+    /// Where engine word `word` (1-based) of an ayah is printed: the last box starting at or before it.
+    func word(surah: Int, ayah: Int, word: Int) -> (page: Int, box: WordBox)? {
+        guard let entry = ayahWords["\(surah):\(ayah)"],
+              let box = entry.words.last(where: { !$0.isMedallion && $0.word <= word }) else { return nil }
+        return (entry.page, box)
     }
 
     func translation(surah: Int, ayah: Int) -> String? {
@@ -90,7 +105,7 @@ final class MushafData {
 }
 
 extension Bundle {
-    /// Our bundled data (boxes, translations, tilawa bridge). Always use this, never `Bundle.module`:
+    /// Our bundled data (words, translations, tilawa bridge). Always use this, never `Bundle.module`:
     /// SwiftPM's accessor only looks next to the .app and in the absolute build folder, so an installed or
     /// copied app (e.g. /Applications) hits its fatalError once that folder is gone. `build_app.sh` puts the
     /// bundle in Contents/Resources; `swift run` finds it next to the executable.

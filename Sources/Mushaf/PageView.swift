@@ -3,11 +3,11 @@ import SwiftUI
 /// A single Mushaf page: shows the scan, with a soft shimmer while it loads.
 /// `side` controls the gutter shadow so the spine reads correctly in a spread.
 ///
-/// Two interactive overlays sit on the scan (both keyed off the bundled, scan-aligned
-/// ayah boxes in `MushafData`):
+/// Overlays sit on the scan, keyed off the bundled, scan-aligned word boxes in `MushafData`:
 ///   - Translation mode: hover an ayah → highlight its lines + show the translation.
-///   - Memorization mode: hide each ayah's text → click an ayah to reveal/re-hide it.
-///   - Recite mode: outline the ayah being recited, underline ayahs with a mistake (`Recitation`).
+///   - Memorization mode: hide each ayah's text → click an ayah to reveal/re-hide it; reciting uncovers
+///     it word by word.
+///   - Recite mode: outline the word being recited, underline words with a mistake (`Recitation`).
 struct PageView: View {
     let page: Int
     var side: Side = .single
@@ -53,7 +53,7 @@ struct PageView: View {
         }
     }
 
-    // MARK: - ayah interaction overlay (translation hover + memorization masks)
+    // MARK: - overlays (translation hover, memorization covers, recite marks)
 
     @ViewBuilder private var ayahLayer: some View {
         if image != nil, reader.translateMode || reader.memorizeMode || recitation.marksVisible {
@@ -112,15 +112,23 @@ struct PageView: View {
             }
     }
 
-    // MARK: memorization (hide / click-to-reveal)
+    // MARK: memorization (hide / click-to-reveal / uncover as recited)
 
     @ViewBuilder private func memorizeOverlay(_ fit: CGRect) -> some View {
+        ForEach(covers()) { cover in
+            let fr = denormalize(cover.rect, in: fit)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(reader.palette.pageCover)
+                .frame(width: fr.width, height: fr.height)
+                .position(x: fr.midX, y: fr.midY)
+        }
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.18), value: reader.revealedThrough)
+        // Click anywhere on an ayah's lines to reveal / re-hide all of it.
         ForEach(Array(MushafData.shared.ayahs(onPage: page).enumerated()), id: \.offset) { _, box in
-            let hidden = !reader.isRevealed(surah: box.surah, ayah: box.ayah)
             ForEach(Array(box.rects.enumerated()), id: \.offset) { _, r in
                 let fr = denormalize(r, in: fit)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(hidden ? reader.palette.pageCover : Color.clear)
+                Color.clear
                     .frame(width: fr.width, height: fr.height)
                     .contentShape(Rectangle())
                     .onTapGesture { reader.toggleReveal(surah: box.surah, ayah: box.ayah) }
@@ -129,35 +137,53 @@ struct PageView: View {
         }
     }
 
-    // MARK: recite (current ayah + mistakes; drawn over memorization covers, never hit-testable)
+    /// Each line's runs of still-hidden words, merged so no seams show between words. A run is keyed by its
+    /// last (leftmost) word, which stays put while recitation uncovers the run from the right — so it shrinks
+    /// smoothly instead of being replaced.
+    private struct Cover: Identifiable { let id: String; let rect: CGRect }
+    private func covers() -> [Cover] {
+        var out: [Cover] = []
+        for (l, line) in MushafData.shared.lines(onPage: page).enumerated() {
+            var run: CGRect?
+            for (i, w) in line.enumerated() {
+                if reader.isRevealed(w) {
+                    if let r = run { out.append(Cover(id: "\(l)-\(i - 1)", rect: r)) }
+                    run = nil
+                } else {
+                    run = run.map { $0.union(w.rect) } ?? w.rect
+                }
+            }
+            if let r = run { out.append(Cover(id: "\(l)-\(line.count - 1)", rect: r)) }
+        }
+        return out
+    }
+
+    // MARK: recite (the word being recited + words with a mistake; drawn over the covers, never hit-testable)
 
     @ViewBuilder private func reciteOverlay(_ fit: CGRect) -> some View {
         let p = reader.palette
-        ForEach(Array(MushafData.shared.ayahs(onPage: page).enumerated()), id: \.offset) { _, box in
-            let current = recitation.isCurrent(surah: box.surah, ayah: box.ayah)
-            let flagged = recitation.hasMistake(surah: box.surah, ayah: box.ayah)
-            if current || flagged {
-                ForEach(Array(box.rects.enumerated()), id: \.offset) { _, r in
-                    let fr = denormalize(r, in: fit)
-                    ZStack(alignment: .bottom) {
-                        if current {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(p.accent.opacity(0.10))
-                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(p.accent.opacity(0.7), lineWidth: 1.4))
-                        }
-                        if flagged {   // underline just below the line's glyphs (rects are glyph-tight)
-                            Capsule().fill(p.pageMark.opacity(0.8))
-                                .frame(height: max(1.5, fr.height * 0.055))
-                                .offset(y: fr.height * 0.14)
-                        }
-                    }
-                    .frame(width: fr.width, height: fr.height, alignment: .bottom)
+        ZStack(alignment: .topLeading) {
+            if let w = recitation.word, let at = MushafData.shared.word(surah: w.surah, ayah: w.ayah, word: w.word),
+               at.page == page {
+                let fr = denormalize(at.box.rect, in: fit).insetBy(dx: -2, dy: 0)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(p.accent.opacity(0.12))
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(p.accent.opacity(0.75), lineWidth: 1.4))
+                    .frame(width: fr.width, height: fr.height)
                     .position(x: fr.midX, y: fr.midY)
+            }
+            ForEach(recitation.mistakes) { m in
+                if let at = MushafData.shared.word(surah: m.location.surah, ayah: m.location.ayah, word: m.location.word),
+                   at.page == page {
+                    let fr = denormalize(at.box.rect, in: fit)
+                    Capsule().fill(p.pageMark.opacity(0.85))   // underline just below the word's descenders
+                        .frame(width: fr.width * 0.9, height: max(1.5, fr.height * 0.045))
+                        .position(x: fr.midX, y: fr.maxY - fr.height * 0.1)
                 }
             }
         }
         .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.2), value: recitation.word)
+        .animation(.easeOut(duration: 0.15), value: recitation.word)
     }
 
     // MARK: - image-fit geometry (image is shown aspect-fit, so it may be letterboxed)

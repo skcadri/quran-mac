@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Floating card over the spread while reciting: engine status, where you are, the words of the current ayah
-/// as you say them, and — once the take ends — a summary of what's worth a second look.
+/// Card below the spread while reciting: engine status and where you are (the words themselves are marked
+/// on the scan), and — once the take ends — a summary of what's worth a second look.
 struct RecitationHUD: View {
     @EnvironmentObject var recitation: Recitation
     @EnvironmentObject var reader: Reader
@@ -38,7 +38,6 @@ struct RecitationHUD: View {
             if case .preparing(_, let fraction) = recitation.phase {
                 ProgressView(value: fraction).progressViewStyle(.linear).tint(p.accent).controlSize(.small)
             }
-            if let w = recitation.word { wordStrip(w) }
         }
         .modifier(Card(p: p))
     }
@@ -102,40 +101,6 @@ struct RecitationHUD: View {
             Image(systemName: "mic.fill").font(.system(size: 12)).foregroundStyle(p.accent)
         }
         .frame(width: 30, height: 30)
-    }
-
-    /// The current ayah's words up to the one just recited (never ahead — this is a memorization aid).
-    /// Recited words are soft, the current one sits in a pill, mistakes get a maroon underline.
-    private func wordStrip(_ w: WordRef) -> some View {
-        let words = recitation.words(surah: w.surah, ayah: w.ayah)
-        let shown = 10
-        let upTo = min(w.word, words.count)
-        let from = max(0, upTo - shown)
-        let flagged = Set(recitation.mistakes.filter { $0.location.surah == w.surah && $0.location.ayah == w.ayah }.map { $0.location.word })
-        var text = AttributedString(from > 0 ? "… " : "")
-        for i in from..<upTo {
-            var word = AttributedString(words[i])
-            if i == upTo - 1 {
-                word.foregroundColor = p.accent
-                word.backgroundColor = p.accentSoft
-            } else {
-                word.foregroundColor = p.inkSoft
-            }
-            if flagged.contains(i + 1) {
-                word.foregroundColor = p.mistake
-                word.underlineStyle = .init(pattern: .solid, color: p.mistake)
-            }
-            text += word
-            text += AttributedString(" ")
-        }
-        if upTo == words.count, !words.isEmpty { text += AttributedString("۝\(Self.arabicDigits(w.ayah))") }
-        return Text(text)
-            .font(.custom("Geeza Pro", size: 21))
-            .lineSpacing(4)
-            .lineLimit(2)
-            .multilineTextAlignment(.trailing)   // Arabic reads from the right edge
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .animation(nil, value: w)
     }
 
     // MARK: summary
@@ -212,11 +177,6 @@ struct RecitationHUD: View {
 
     private func surahName(_ n: Int) -> String {
         QuranData.surahs.indices.contains(n - 1) ? QuranData.surahs[n - 1].english : "Surah \(n)"
-    }
-
-    static func arabicDigits(_ n: Int) -> String {
-        let digits = Array("٠١٢٣٤٥٦٧٨٩")
-        return String(String(n).compactMap { $0.wholeNumberValue.map { digits[$0] } })
     }
 
     private struct Card: ViewModifier {

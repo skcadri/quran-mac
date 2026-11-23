@@ -23,8 +23,8 @@ struct Mistake: Identifiable, Codable, Equatable {
     var text: String { Self.wording[errorClass]?.text ?? "" }
 }
 
-/// Recite mode: listens on the microphone, follows the reciter on the scans (current ayah outlined, pages
-/// turn by themselves), reveals hidden ayahs in memorization mode as they're recited, and marks mistakes.
+/// Recite mode: listens on the microphone, follows the reciter on the scans (current word outlined, pages
+/// turn by themselves), uncovers hidden words in memorization mode as they're recited, and marks mistakes.
 /// All recognition is on-device, by tilawa (`TilawaEngine`).
 @MainActor
 final class Recitation: ObservableObject {
@@ -65,13 +65,9 @@ final class Recitation: ObservableObject {
     init() { engine.onMessage = { [weak self] in self?.handle($0) } }
 
     var isActive: Bool { phase != .off || summary != nil }
-    /// Whether the scans should draw recitation marks (current ayah / mistakes).
+    /// Whether the scans should draw recitation marks (current word / mistakes).
     var marksVisible: Bool { word != nil || !mistakes.isEmpty }
 
-    func isCurrent(surah: Int, ayah: Int) -> Bool { word?.surah == surah && word?.ayah == ayah }
-    func hasMistake(surah: Int, ayah: Int) -> Bool {
-        mistakes.contains { $0.location.surah == surah && $0.location.ayah == ayah }
-    }
     func words(surah: Int, ayah: Int) -> [String] { words["\(surah):\(ayah)"] ?? [] }
 
     // MARK: start / stop
@@ -152,10 +148,7 @@ final class Recitation: ObservableObject {
 
     /// Jump to the page holding a mistake.
     func show(_ m: Mistake) {
-        let count = words(surah: m.location.surah, ayah: m.location.ayah).count
-        if let page = MushafData.shared.page(surah: m.location.surah, ayah: m.location.ayah, word: m.location.word, of: count) {
-            reader?.go(to: page)
-        }
+        if let page = MushafData.shared.page(surah: m.location.surah, ayah: m.location.ayah) { reader?.go(to: page) }
     }
 
     private func setProgress(_ label: String, _ p: Double) {
@@ -196,16 +189,18 @@ final class Recitation: ObservableObject {
         }
         if word?.surah != w.surah || word?.ayah != w.ayah { Debug.log("at \(w.surah):\(w.ayah)") }
         word = w
+        // Memorization: uncover each word as it's said — up to the one just recited, never ahead.
+        if reader?.memorizeMode == true { reader?.reveal(surah: w.surah, ayah: w.ayah, through: w.word) }
         let count = words(surah: w.surah, ayah: w.ayah).count
         if count > 0, w.word >= count { finished(w.surah, w.ayah) }
-        // Follow the reciter: turn to the spread holding this word.
-        if let reader, let page = MushafData.shared.page(surah: w.surah, ayah: w.ayah, word: w.word, of: count),
+        // Follow the reciter: turn to the spread holding this ayah.
+        if let reader, let page = MushafData.shared.page(surah: w.surah, ayah: w.ayah),
            page != reader.spread.right, page != reader.spread.left {
             reader.go(to: page)
         }
     }
 
-    /// An ayah has been recited through: in memorization mode, uncover it.
+    /// An ayah has been recited through: in memorization mode, uncover all of it (with its medallion).
     private func finished(_ surah: Int, _ ayah: Int) {
         if reader?.memorizeMode == true { reader?.reveal(surah: surah, ayah: ayah) }
     }

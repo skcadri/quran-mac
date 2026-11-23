@@ -35,12 +35,15 @@ final class Reader: ObservableObject {
     @Published var immersive = false           // fullscreen, chrome hidden
     @Published var isDark = false
     /// Translation mode: hover an ayah on the scan to read its English translation.
-    /// Uses the bundled scan-aligned ayah boxes (`MushafData`); the page image is unchanged.
+    /// Uses the bundled scan-aligned word/ayah boxes (`MushafData`); the page image is unchanged.
     @Published var translateMode = UserDefaults.standard.bool(forKey: "translateMode")
-    /// Memorization mode: hides each ayah's text on the scan; click an ayah to reveal it.
+    /// Memorization mode: hides each ayah's text on the scan; click an ayah to reveal it, or recite to
+    /// uncover it word by word.
     @Published var memorizeMode = false
-    /// Ayahs ("surah:ayah") the user has revealed in the current memorization session.
+    /// Ayahs ("surah:ayah") revealed whole in the current memorization session (clicked, or recited through).
     @Published var revealed: Set<String> = []
+    /// How far into an ayah recitation has uncovered it so far ("surah:ayah" → engine word index).
+    @Published var revealedThrough: [String: Int] = [:]
     /// The ayah hovered in Translation mode (drives the side translation card).
     @Published var hover: AyahHover?
     @Published var bookmarks: Set<Int> = {
@@ -90,16 +93,25 @@ final class Reader: ObservableObject {
 
     func toggleMemorize() {
         memorizeMode.toggle()
-        if !memorizeMode { revealed.removeAll() }   // leaving the mode un-hides everything
+        if !memorizeMode { revealed.removeAll(); revealedThrough.removeAll() }   // leaving the mode un-hides everything
     }
 
-    /// Click handler in memorization mode: reveal (or re-hide) one ayah.
+    /// Click handler in memorization mode: reveal (or re-hide) one whole ayah.
     func toggleReveal(surah: Int, ayah: Int) {
         let key = "\(surah):\(ayah)"
-        if revealed.contains(key) { revealed.remove(key) } else { revealed.insert(key) }
+        if revealed.contains(key) { revealed.remove(key); revealedThrough[key] = nil } else { revealed.insert(key) }
     }
     func reveal(surah: Int, ayah: Int) { revealed.insert("\(surah):\(ayah)") }
-    func isRevealed(surah: Int, ayah: Int) -> Bool { revealed.contains("\(surah):\(ayah)") }
+    /// Uncover an ayah up to and including engine word `word` (never un-hides less than before).
+    func reveal(surah: Int, ayah: Int, through word: Int) {
+        let key = "\(surah):\(ayah)"
+        if word > revealedThrough[key, default: 0] { revealedThrough[key] = word }
+    }
+    /// A medallion shows only once its whole ayah is revealed.
+    func isRevealed(_ w: WordBox) -> Bool {
+        let key = "\(w.surah):\(w.ayah)"
+        return revealed.contains(key) || (!w.isMedallion && w.word <= revealedThrough[key, default: 0])
+    }
 
     func next() { go(to: min(QuranData.totalPages, spread.right + 2)) }
     func prev() { go(to: max(1, spread.right - 2)) }
