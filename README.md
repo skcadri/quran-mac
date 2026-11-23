@@ -19,6 +19,12 @@ No accounts, no clutter. Open it and read.
 - 🔖 **Remembers your place** — reopens to the last page you were reading.
 - 🖱️ **Scroll-wheel paging** and arrow-key navigation (← forward, → back).
 - 🖥️ **Distraction-free fullscreen** — chrome hides; just the Qur'an. Controls re-appear on mouse move.
+- 🎙️ **Recite mode** (press **R**) — recite from memory and the app follows you on the real page: the
+  ayah you're on is outlined, pages turn by themselves, and missed, changed, extra or skipped words are
+  marked, with a summary at the end. Pair it with memorization mode (👁 hidden ayahs) and each ayah
+  reveals itself once you've recited it. Listening runs entirely on your Mac, powered by
+  [tilawa](https://github.com/yazinsai/tilawa) (one-time ~100 MB download). It checks words, not tajweed.
+- 💬 **Translation on hover** and 👁 **memorization mode** (hide ayahs, click to reveal), drawn on top of the scans.
 - 🌗 **Light & dark** themes, with a warm parchment palette.
 - 📡 **Offline-friendly** — pages are cached to disk as you read, so revisited pages need no network.
 
@@ -95,6 +101,8 @@ to ~150–250 MB first.)
   Complex, sourced via [sufone/medina-mushaf](https://github.com/sufone/medina-mushaf).
   These are **not** redistributed in this repo — they are fetched at runtime.
 - **Surah / juz / hizb metadata:** the [Quran.com API](https://api-docs.quran.foundation/).
+- **Recitation listening:** [tilawa](https://github.com/yazinsai/tilawa) by yazinsai (code MIT, model
+  CC BY 4.0, downloaded at runtime from tilawa.dev). See [`NOTICE`](NOTICE).
 
 ## License
 

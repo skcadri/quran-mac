@@ -1,6 +1,6 @@
 ---
 owner: sohaib
-updated: 2026-06-18
+updated: 2026-11-23
 ---
 
 # Mushaf — native macOS Quran reader
@@ -24,7 +24,7 @@ Native **SwiftUI** app (chosen over Tauri/Electron). Displays the real **Mushaf 
 - `PageStore` loads in this order: bundled `Pages/<n>.png` → on-disk cache (`~/Library/Application Support/Mushaf/pages/`) → network download (then cached). So the app runs immediately and goes offline as pages are visited.
 - **For a true offline build**: drop a `Pages/` resource folder of all 604 (downscale first — full d150 set is ~1.1 GB; target ~150–250 MB) and add it to the target resources. `PageStore.bundledURL` already looks for it.
 
-## Ayah overlays — translation & memorization (both on the scans)
+## Ayah overlays — translation, memorization & recite (all on the scans)
 Both features key off bundled **scan-aligned ayah boxes** (`MushafData`). `PageView` aspect-fits the 1240×1754 scan (`pageAspect`/`fittedRect`) and maps the normalized rects onto it.
 - **Translation mode** — top-bar **character.bubble** button → `Reader.toggleTranslate()`, persisted as `translateMode`. Hover an ayah: `.onContinuousHover` → `MushafData.ayah(onPage:at:)` → highlight its per-line gold rects; the translation shows in a **tooltip bubble beside the ayah** (rendered in `ReaderView`, offset toward the opposite page, tail pointing back, scaled to the line height). The scan is untouched; off = original app.
   - The bubble is **interactive**: a 0.2s grace delay (`Reader.setHover`/`scheduleClearHover`/`cancelClearHover`) lets you mouse onto it; its text is `.textSelection(.enabled)`; the header has **Google** (`magnifyingglass`) and **Claude** (`sparkles`) buttons that `NSWorkspace.open` a search / `claude.ai/new?q=` prompt for that ayah (reference only). Hover state lives on `Reader` (`AyahHover`, positioned in the named `"spread"` coordinate space) so it's correct in windowed/fullscreen/sidebar layouts.
@@ -40,6 +40,37 @@ Both features key off bundled **scan-aligned ayah boxes** (`MushafData`). `PageV
   - Validation: every page's medallion count is checked against its expected ayah count. Markers are numbered by matching reading-order to the page's ordered `(surah,ayah)` list (handles multi-surah pages like 604).
 - Adding resources means `Bundle.module`; `build_app.sh` copies the SPM `Mushaf_Mushaf.bundle` into `Contents/Resources` so the packaged `.app` finds it.
 
+## Recite mode — tilawa listening (`Recitation`, `TilawaEngine`, `RecitationHUD`)
+Mic button / **R** → `Recitation.toggle()`. You recite from memory; the app follows on the scans: the current
+ayah gets a green outline, pages turn by themselves, mistakes get a maroon underline under the ayah's lines, and
+the HUD (below the spread, in the layout — never floating over the page) shows status, the current ayah's words
+**up to the one just said** (never ahead: it's a hifz aid) and an end-of-take summary.
+- **Engine = [tilawa](https://github.com/yazinsai/tilawa) `@tilawa/core`, unmodified, in a hidden WKWebView.**
+  Don't port it to Swift (≈5k lines of tracker/checker) — reuse it. Swift owns: assets, mic, UI. JS owns: the engine.
+  - `TilawaEngine` downloads pinned, immutable tilawa.dev/v1 assets (model 68 MB, `ref-v2.json`, onnxruntime-web
+    `.jsep.mjs` + `.jsep.wasm`) once, verifies size + sha256, caches them in
+    `~/Library/Application Support/Mushaf/tilawa/v1/`, and serves them + the bridge page over the `mushaf://`
+    scheme. Pins must match `tools/tilawa-bridge/package.json` versions (see that folder's CLAUDE.md).
+  - Audio: `AVAudioEngine` input tap (raw, no voice processing) → `AVAudioConverter` to 16 kHz mono →
+    base64 → `tilawaBridge.push`. Requires `NSMicrophoneUsageDescription` (in `build_app.sh`).
+  - Always `startFreeRecitation` (the engine finds your place anywhere), never a declared passage — passages are
+    single-surah and break on multi-surah spreads. Only a `locked` position moves the outline / turns the page.
+  - Memory: the WebContent process holds several hundred MB (JSC lets it balloon to GBs on big-RAM Macs). The
+    engine stays warm 5 min after a take, then `TilawaEngine.unload()` drops the web view. Cold load ≈1.5 s.
+- **Word ↔ page:** we have ayah boxes, not word boxes. `MushafData.page(surah:ayah:word:of:)` picks the page for
+  an ayah that crosses a page break by its share of line width. Pages 1–2 (no boxes) are hard-coded.
+  Word text for the HUD comes from tilawa's own `ref-v2.json` (`w`), so word indices always agree with the engine.
+- **Memorization + recite:** an ayah is revealed (`Reader.reveal`) when its last word is recited or the reciter
+  moves on to a later ayah.
+- Copy for mistakes is tilawa's own non-judgmental wording (`Mistake.wording`). Credit line in the summary
+  ("Listening by Tilawa (tilawa.dev)") is required by the model's CC BY 4.0 licence — keep it.
+- **Testing without a mic or screen recording** (agents): launch the binary directly with env vars —
+  `MUSHAF_RECITE_FILES=a.mp3:b.mp3` (fed instead of the mic; recitation auto-starts; logs `[recite …]` lines:
+  `at 67:3`, `mistake …`, `summary: …`), `MUSHAF_MEMORIZE=1`, `MUSHAF_SNAPSHOT=/tmp/shot` (window PNG every 2 s via
+  `cacheDisplay`, no permission needed), `MUSHAF_DEBUG=1` (verbose). Per-ayah reciter audio:
+  `https://everyayah.com/data/Husary_64kbps/<SSSAAA>.mp3`. Skipping a file (e.g. 67:3) must yield
+  `skipped_passage@67:3:1`. Note `go(to:)` persists `lastPage` — restore it after testing.
+
 ## Quran metadata
 - `QuranData.swift` is **auto-generated** — do not hand-edit. Surah list from quran.com `/chapters`; hizb starts from `/verses/by_hizb` (60); rub-al-hizb quarter starts from `/verses/by_rub_el_hizb` (240); juz starts are the standard fixed table.
   - Gotcha when refetching: quran.com ignores `per_page=1` and its JSON has a **duplicate `page_number` key**. Parse the **first** `page_number` occurrence (`grep -o … | head -1`), never a greedy `sed` (grabs the last verse's page → wrong).
@@ -49,8 +80,8 @@ Both features key off bundled **scan-aligned ayah boxes** (`MushafData`). `PageV
 - All colors come from `Palette` (light/dark) in `Theme.swift`. Never hardcode a `Color(hex:)` in a view — add it to `Palette`.
 - Navigation goes through `Reader` (`go`/`next`/`prev`). The **bottom slider is always a flat page scrubber (1…604)** — do not make it unit-based. Surah/Juz/Hizb jumping lives in the **sidebar** (`Reader.navMode`); Hizb mode lists all 240 quarters (¼/½/¾ marks via `rubStartPages`). A 4th nav tab **★** (`NavUnit.bookmarks`) lists starred pages (sorted), with an empty state.
 - **Persistence (UserDefaults, domain `com.sohaib.mushaf`):** `lastPage` is written in `Reader.go` and restored in the `currentPage` initializer (opens where you left off). `bookmarks` is a `[Int]` written on every toggle. The star button (bottom bar + immersive overlay) toggles the current page. `translateMode` (Bool) persists the Reading/Translation toggle.
-- `PageView` loads via `PageStore.load`, which **coalesces concurrent loads of the same (page, mode)** (one shared `Task`) so the visible page never loses a race with prefetch and goes blank. `PageView.task` is keyed on `"<page>-<translateMode>"` so flipping the toggle reloads the right source; it also retries a few times so a transient network miss self-heals. Don't reintroduce a nil-on-in-flight guard.
+- `PageView` loads via `PageStore.load`, which **coalesces concurrent loads of the same page** (one shared `Task`) so the visible page never loses a race with prefetch and goes blank. `PageView.task` is keyed on the page and retries a few times so a transient network miss self-heals. Don't reintroduce a nil-on-in-flight guard.
 - No page-turn animation (removed by request). If re-adding, keep it optional.
-- Keyboard: ← / `a` = forward (RTL), → / `d` = back, space = forward, `f` = fullscreen. Fullscreen sets `Reader.immersive`, which hides all chrome; controls re-reveal on mouse move.
+- Keyboard: ← / `a` = forward (RTL), → / `d` = back, space = forward, `f` = fullscreen, `r` = recite on/off. Fullscreen sets `Reader.immersive`, which hides all chrome; controls re-reveal on mouse move.
 - **Nav chevrons match their corner**: chevron.left on the **left** (→ `next`, forward in RTL), chevron.right on the **right** (→ `prev`), in both the control bar and the immersive overlay. Don't swap them back.
 - **Scroll wheel pages** through the Mushaf (down = forward). Local `.scrollWheel` `NSEvent` monitor in `ContentView.installScrollMonitor` → `Reader.handleScroll`. **No time-based rate limiting** (removed by request): mouse wheel = one notch → one spread instantly; trackpad (precise deltas) accumulates and steps proportionally to swipe distance. Scrolls over the left 298pt (sidebar) pass through so the list scrolls instead.

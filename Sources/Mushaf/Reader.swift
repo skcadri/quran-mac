@@ -98,6 +98,7 @@ final class Reader: ObservableObject {
         let key = "\(surah):\(ayah)"
         if revealed.contains(key) { revealed.remove(key) } else { revealed.insert(key) }
     }
+    func reveal(surah: Int, ayah: Int) { revealed.insert("\(surah):\(ayah)") }
     func isRevealed(surah: Int, ayah: Int) -> Bool { revealed.contains("\(surah):\(ayah)") }
 
     func next() { go(to: min(QuranData.totalPages, spread.right + 2)) }

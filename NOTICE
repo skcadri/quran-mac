@@ -12,3 +12,16 @@ owners. The Quran is sacred scripture; use this tool with adab.
 
 Surah / juz / hizb / rub-al-hizb metadata is derived from the Quran.com API
 (https://api-docs.quran.foundation/).
+
+RECITE MODE — tilawa (https://github.com/yazinsai/tilawa)
+
+Sources/Mushaf/Resources/tilawa-bridge.js bundles @tilawa/core (MIT, (c) 2026
+yazinsai) and onnxruntime-web (MIT, (c) Microsoft Corporation); full licence texts
+in tools/tilawa-bridge/THIRD-PARTY-LICENSES.txt. On first use the
+app downloads, from https://tilawa.dev/v1/, the tilawa listening model
+(spliced-clean@1-int8, CC BY 4.0 — credit: Tilawa, tilawa.dev), the tilawa Quran
+reference (ref-v2: Tanzil Uthmani text, phonemized with obadx/quran-transcript;
+Tanzil terms apply) and the onnxruntime-web WebAssembly runtime. None of these
+are redistributed in this repository. All recognition runs on the user's Mac.
+
+Ayah translations (Saheeh International) come via Tanzil / quran-json.

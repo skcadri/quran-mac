@@ -7,10 +7,12 @@ import SwiftUI
 /// ayah boxes in `MushafData`):
 ///   - Translation mode: hover an ayah → highlight its lines + show the translation.
 ///   - Memorization mode: hide each ayah's text → click an ayah to reveal/re-hide it.
+///   - Recite mode: outline the ayah being recited, underline ayahs with a mistake (`Recitation`).
 struct PageView: View {
     let page: Int
     var side: Side = .single
     @EnvironmentObject var reader: Reader
+    @EnvironmentObject var recitation: Recitation
     @State private var image: NSImage?
     @State private var hovered: AyahBox?
 
@@ -54,11 +56,12 @@ struct PageView: View {
     // MARK: - ayah interaction overlay (translation hover + memorization masks)
 
     @ViewBuilder private var ayahLayer: some View {
-        if image != nil, reader.translateMode || reader.memorizeMode {
+        if image != nil, reader.translateMode || reader.memorizeMode || recitation.marksVisible {
             GeometryReader { geo in
                 let fit = fittedRect(in: geo.size)
                 ZStack(alignment: .topLeading) {
                     if reader.memorizeMode { memorizeOverlay(fit) }
+                    if recitation.marksVisible { reciteOverlay(fit) }
                     if reader.translateMode { translateOverlay(fit, geo: geo) }
                 }
             }
@@ -124,6 +127,37 @@ struct PageView: View {
                     .position(x: fr.midX, y: fr.midY)
             }
         }
+    }
+
+    // MARK: recite (current ayah + mistakes; drawn over memorization covers, never hit-testable)
+
+    @ViewBuilder private func reciteOverlay(_ fit: CGRect) -> some View {
+        let p = reader.palette
+        ForEach(Array(MushafData.shared.ayahs(onPage: page).enumerated()), id: \.offset) { _, box in
+            let current = recitation.isCurrent(surah: box.surah, ayah: box.ayah)
+            let flagged = recitation.hasMistake(surah: box.surah, ayah: box.ayah)
+            if current || flagged {
+                ForEach(Array(box.rects.enumerated()), id: \.offset) { _, r in
+                    let fr = denormalize(r, in: fit)
+                    ZStack(alignment: .bottom) {
+                        if current {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(p.accent.opacity(0.10))
+                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(p.accent.opacity(0.7), lineWidth: 1.4))
+                        }
+                        if flagged {   // underline just below the line's glyphs (rects are glyph-tight)
+                            Capsule().fill(p.pageMark.opacity(0.8))
+                                .frame(height: max(1.5, fr.height * 0.055))
+                                .offset(y: fr.height * 0.14)
+                        }
+                    }
+                    .frame(width: fr.width, height: fr.height, alignment: .bottom)
+                    .position(x: fr.midX, y: fr.midY)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.2), value: recitation.word)
     }
 
     // MARK: - image-fit geometry (image is shown aspect-fit, so it may be letterboxed)

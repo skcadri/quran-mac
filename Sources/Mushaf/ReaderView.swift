@@ -3,13 +3,17 @@ import AppKit
 
 struct ReaderView: View {
     @EnvironmentObject var reader: Reader
+    @EnvironmentObject var recitation: Recitation
     private var p: Palette { reader.palette }
 
     var body: some View {
         VStack(spacing: 0) {
             if !reader.immersive { topLabel }
             spreadArea
+            // In the layout (not floating) so it never covers the lines being recited; the pages shrink to fit.
+            if recitation.isActive { RecitationHUD().padding(.bottom, 14) }
         }
+        .animation(.easeInOut(duration: 0.25), value: recitation.isActive)
         .background(p.readingBackground)
     }
 

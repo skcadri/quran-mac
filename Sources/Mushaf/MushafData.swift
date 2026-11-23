@@ -18,6 +18,8 @@ final class MushafData {
 
     private var boxesByPage: [Int: [AyahBox]] = [:]
     private var translations: [String: String] = [:]
+    /// "s:a" → the pages an ayah appears on (ascending) with its total line width there.
+    private var footprint: [String: [(page: Int, width: CGFloat)]] = [:]
 
     private struct RawBox: Decodable { let s: Int; let a: Int; let r: [[Double]] }
 
@@ -35,6 +37,11 @@ final class MushafData {
                 boxesByPage[page] = arr.map { b in
                     AyahBox(surah: b.s, ayah: b.a,
                             rects: b.r.map { CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) })
+                }
+            }
+            for page in boxesByPage.keys.sorted() {
+                for box in boxesByPage[page]! {
+                    footprint["\(box.surah):\(box.ayah)", default: []].append((page, box.rects.reduce(0) { $0 + $1.width }))
                 }
             }
         }
@@ -56,6 +63,25 @@ final class MushafData {
         boxesByPage[page]?.first { box in
             box.rects.contains { $0.insetBy(dx: 0, dy: -Self.lineHitPad).contains(p) }
         }
+    }
+
+    /// The page showing word `word` (1-based, of `count`) of an ayah. An ayah that crosses a page break is
+    /// split by its share of line width on each page (we have ayah boxes, not word boxes). Pages 1–2 have no
+    /// boxes, so Al-Fatihah → 1 and al-Baqarah 1–5 → 2 are hard-coded.
+    func page(surah: Int, ayah: Int, word: Int, of count: Int) -> Int? {
+        guard let parts = footprint["\(surah):\(ayah)"], let last = parts.last else {
+            if surah == 1 { return 1 }
+            if surah == 2 && ayah <= 5 { return 2 }
+            return nil
+        }
+        let total = parts.reduce(0) { $0 + $1.width }
+        let target = total * (CGFloat(word) - 0.5) / CGFloat(max(count, 1))
+        var acc: CGFloat = 0
+        for part in parts {
+            acc += part.width
+            if target <= acc { return part.page }
+        }
+        return last.page
     }
 
     func translation(surah: Int, ayah: Int) -> String? {

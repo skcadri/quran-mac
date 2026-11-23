@@ -6,6 +6,9 @@ DerivedData/
 # Built app bundle (produced by build_app.sh)
 Mushaf.app/
 
+# tilawa bridge build deps
+tools/tilawa-bridge/node_modules/
+
 # macOS
 .DS_Store
 .gstack/

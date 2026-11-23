@@ -15,7 +15,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Mushaf"
 cp design/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-# SPM resource bundle (boxes.json + translations.json for Translation mode).
+# SPM resource bundle (boxes.json, translations.json, tilawa-bridge.js).
 # Bundle.module finds it via Contents/Resources.
 if [ -d "$BIN_DIR/Mushaf_Mushaf.bundle" ]; then
   cp -R "$BIN_DIR/Mushaf_Mushaf.bundle" "$APP/Contents/Resources/"
@@ -38,6 +38,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.reference</string>
+  <key>NSMicrophoneUsageDescription</key><string>Mushaf listens while you recite so it can follow along on the page and point out missed or changed words. Audio never leaves this Mac.</string>
 </dict>
 </plist>
 PLIST
