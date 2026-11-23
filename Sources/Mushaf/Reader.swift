@@ -8,6 +8,21 @@ enum NavUnit: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// The ayah currently hovered in Translation mode. Lifted to `Reader` so the spread can
+/// render a tooltip bubble next to the hovered line (the page clips its own overlays).
+/// Coordinates are normalized 0…1 in the hovered page's image.
+struct AyahHover: Equatable {
+    let page: Int
+    let surah: Int
+    let ayah: Int
+    // Hovered line's edges in the shared "spread" coordinate space (computed by PageView, so it's
+    // correct in any layout — windowed, fullscreen, sidebar). The bubble sits beside the line.
+    let leftX: CGFloat
+    let rightX: CGFloat
+    let centerY: CGFloat
+    let lineH: CGFloat   // rendered height of the line — drives bubble/text scaling
+}
+
 @MainActor
 final class Reader: ObservableObject {
     @Published var currentPage: Int = {
@@ -19,6 +34,15 @@ final class Reader: ObservableObject {
     @Published var showControls = true
     @Published var immersive = false           // fullscreen, chrome hidden
     @Published var isDark = false
+    /// Translation mode: hover an ayah on the scan to read its English translation.
+    /// Uses the bundled scan-aligned ayah boxes (`MushafData`); the page image is unchanged.
+    @Published var translateMode = UserDefaults.standard.bool(forKey: "translateMode")
+    /// Memorization mode: hides each ayah's text on the scan; click an ayah to reveal it.
+    @Published var memorizeMode = false
+    /// Ayahs ("surah:ayah") the user has revealed in the current memorization session.
+    @Published var revealed: Set<String> = []
+    /// The ayah hovered in Translation mode (drives the side translation card).
+    @Published var hover: AyahHover?
     @Published var bookmarks: Set<Int> = {
         let arr = UserDefaults.standard.array(forKey: "bookmarks") as? [Int] ?? []
         return Set(arr)
@@ -38,8 +62,43 @@ final class Reader: ObservableObject {
     func go(to page: Int) {
         currentPage = max(1, min(QuranData.totalPages, page))
         UserDefaults.standard.set(currentPage, forKey: "lastPage")   // restore on next launch
+        hover = nil
         PageStore.shared.prefetch(around: currentPage)
     }
+
+    func toggleTranslate() {
+        translateMode.toggle()
+        if !translateMode { cancelClearHover(); hover = nil }
+        UserDefaults.standard.set(translateMode, forKey: "translateMode")
+    }
+
+    // MARK: hover persistence (so the translation bubble can be moused-over and interacted with)
+    private var clearWork: DispatchWorkItem?
+
+    func setHover(_ h: AyahHover) {
+        cancelClearHover()
+        if hover != h { hover = h }
+    }
+    /// Don't clear immediately — give the cursor time to travel onto the bubble.
+    func scheduleClearHover() {
+        clearWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.hover = nil }
+        clearWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+    }
+    func cancelClearHover() { clearWork?.cancel(); clearWork = nil }
+
+    func toggleMemorize() {
+        memorizeMode.toggle()
+        if !memorizeMode { revealed.removeAll() }   // leaving the mode un-hides everything
+    }
+
+    /// Click handler in memorization mode: reveal (or re-hide) one ayah.
+    func toggleReveal(surah: Int, ayah: Int) {
+        let key = "\(surah):\(ayah)"
+        if revealed.contains(key) { revealed.remove(key) } else { revealed.insert(key) }
+    }
+    func isRevealed(surah: Int, ayah: Int) -> Bool { revealed.contains("\(surah):\(ayah)") }
 
     func next() { go(to: min(QuranData.totalPages, spread.right + 2)) }
     func prev() { go(to: max(1, spread.right - 2)) }

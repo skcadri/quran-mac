@@ -52,6 +52,8 @@ struct ContentView: View {
         .onKeyPress(.leftArrow)  { reader.next(); return .handled }
         .onKeyPress(.rightArrow) { reader.prev(); return .handled }
         .onKeyPress(.space)      { reader.next(); return .handled }
+        .onKeyPress(keys: ["a"]) { _ in reader.next(); return .handled }   // RTL: left = forward
+        .onKeyPress(keys: ["d"]) { _ in reader.prev(); return .handled }   // RTL: right = back
         .onKeyPress(keys: ["f"]) { _ in window?.toggleFullScreen(nil); return .handled }
         .onAppear {
             PageStore.shared.prefetch(around: reader.currentPage)
@@ -76,6 +78,12 @@ struct ContentView: View {
             .font(.system(size: 13))
             Spacer()
             HStack(spacing: 4) {
+                iconButton("character.bubble", active: reader.translateMode) {
+                    withAnimation(.easeInOut(duration: 0.2)) { reader.toggleTranslate() }
+                }
+                iconButton("eye.slash", active: reader.memorizeMode) {
+                    withAnimation(.easeInOut(duration: 0.2)) { reader.toggleMemorize() }
+                }
                 iconButton("sidebar.left", active: reader.showSidebar) {
                     withAnimation(.easeInOut(duration: 0.25)) { reader.showSidebar.toggle() }
                 }
@@ -111,10 +119,10 @@ struct ContentView: View {
             .padding(.top, 12)
             Spacer()
             HStack(spacing: 16) {
-                floatButton("chevron.right") { reader.prev() }
+                floatButton("chevron.left") { reader.next() }   // RTL: left = forward
                 floatButton(reader.isBookmarked ? "star.fill" : "star") { reader.toggleBookmark() }
                 floatButton("arrow.down.right.and.arrow.up.left") { window?.toggleFullScreen(nil) }
-                floatButton("chevron.left") { reader.next() }
+                floatButton("chevron.right") { reader.prev() }  // RTL: right = back
             }
             .padding(10)
             .background(.ultraThinMaterial, in: Capsule())

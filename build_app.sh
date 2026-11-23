@@ -7,12 +7,19 @@ CONFIG="${1:-release}"
 echo "Building ($CONFIG)…"
 swift build -c "$CONFIG"
 
-BIN=$(swift build -c "$CONFIG" --show-bin-path)/Mushaf
+BIN_DIR=$(swift build -c "$CONFIG" --show-bin-path)
+BIN="$BIN_DIR/Mushaf"
 APP="$PWD/Mushaf.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Mushaf"
 cp design/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
+# SPM resource bundle (boxes.json + translations.json for Translation mode).
+# Bundle.module finds it via Contents/Resources.
+if [ -d "$BIN_DIR/Mushaf_Mushaf.bundle" ]; then
+  cp -R "$BIN_DIR/Mushaf_Mushaf.bundle" "$APP/Contents/Resources/"
+fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
