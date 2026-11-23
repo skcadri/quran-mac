@@ -24,12 +24,12 @@ final class MushafData {
     private struct RawBox: Decodable { let s: Int; let a: Int; let r: [[Double]] }
 
     private init() {
-        if let url = Bundle.module.url(forResource: "translations", withExtension: "json"),
+        if let url = Bundle.resources.url(forResource: "translations", withExtension: "json"),
            let data = try? Data(contentsOf: url),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             translations = dict
         }
-        if let url = Bundle.module.url(forResource: "boxes", withExtension: "json"),
+        if let url = Bundle.resources.url(forResource: "boxes", withExtension: "json"),
            let data = try? Data(contentsOf: url),
            let raw = try? JSONDecoder().decode([String: [RawBox]].self, from: data) {
             for (key, arr) in raw {
@@ -87,4 +87,16 @@ final class MushafData {
     func translation(surah: Int, ayah: Int) -> String? {
         translations["\(surah):\(ayah)"]
     }
+}
+
+extension Bundle {
+    /// Our bundled data (boxes, translations, tilawa bridge). Always use this, never `Bundle.module`:
+    /// SwiftPM's accessor only looks next to the .app and in the absolute build folder, so an installed or
+    /// copied app (e.g. /Applications) hits its fatalError once that folder is gone. `build_app.sh` puts the
+    /// bundle in Contents/Resources; `swift run` finds it next to the executable.
+    static let resources: Bundle = {
+        if let url = Bundle.main.resourceURL?.appendingPathComponent("Mushaf_Mushaf.bundle"),
+           let bundle = Bundle(url: url) { return bundle }
+        return Bundle.module
+    }()
 }

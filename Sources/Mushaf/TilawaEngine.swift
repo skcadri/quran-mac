@@ -225,7 +225,7 @@ private final class SchemeHandler: NSObject, WKURLSchemeHandler {
         if path == "/app/index.html" {
             data = Data(#"<!doctype html><meta charset="utf-8"><script type="module" src="/app/tilawa-bridge.js"></script>"#.utf8)
         } else if path == "/app/tilawa-bridge.js" {
-            data = Bundle.module.url(forResource: "tilawa-bridge", withExtension: "js").flatMap { try? Data(contentsOf: $0) }
+            data = Bundle.resources.url(forResource: "tilawa-bridge", withExtension: "js").flatMap { try? Data(contentsOf: $0) }
         } else if path.hasPrefix("/v1/") {
             let rel = String(path.dropFirst(4))
             if TilawaEngine.assets.contains(where: { $0.path == rel }) {

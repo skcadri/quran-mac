@@ -38,7 +38,7 @@ Both features key off bundled **scan-aligned ayah boxes** (`MushafData`). `PageV
   3. On **surah-start pages**, drop the ornamental **header band** (high ink-density, ~0.14) and **basmala band** (low density, ~0.05) so they aren't swallowed into the first ayah's box.
   4. Each ayah's region = the text flowing right-to-left/top-to-bottom **between consecutive medallions**, as per-line rects, **clamped to the per-parity text block** (odd `x∈[67,1044]`, even `x∈[195,1172]` — odd/even differ by the gutter margin) so nothing spills into the decorative border.
   - Validation: every page's medallion count is checked against its expected ayah count. Markers are numbered by matching reading-order to the page's ordered `(surah,ayah)` list (handles multi-surah pages like 604).
-- Adding resources means `Bundle.module`; `build_app.sh` copies the SPM `Mushaf_Mushaf.bundle` into `Contents/Resources` so the packaged `.app` finds it.
+- Read bundled resources via **`Bundle.resources`** (in `MushafData.swift`), **never `Bundle.module`**: SwiftPM's accessor only checks next to the `.app` and the absolute build folder, so an app copied to /Applications crashes (`fatalError`) once that folder is gone. `build_app.sh` copies `Mushaf_Mushaf.bundle` into `Contents/Resources`, which `Bundle.resources` checks first.
 
 ## Recite mode — tilawa listening (`Recitation`, `TilawaEngine`, `RecitationHUD`)
 Mic button / **R** → `Recitation.toggle()`. You recite from memory; the app follows on the scans: the current
