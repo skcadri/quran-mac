@@ -8,6 +8,21 @@ enum NavUnit: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// The ayah currently hovered in Translation mode. Lifted to `Reader` so the spread can
+/// render a tooltip bubble next to the hovered line (the page clips its own overlays).
+/// Coordinates are normalized 0…1 in the hovered page's image.
+struct AyahHover: Equatable {
+    let page: Int
+    let surah: Int
+    let ayah: Int
+    // Hovered line's edges in the shared "spread" coordinate space (computed by PageView, so it's
+    // correct in any layout — windowed, fullscreen, sidebar). The bubble sits beside the line.
+    let leftX: CGFloat
+    let rightX: CGFloat
+    let centerY: CGFloat
+    let lineH: CGFloat   // rendered height of the line — drives bubble/text scaling
+}
+
 @MainActor
 final class Reader: ObservableObject {
     @Published var currentPage: Int = {
@@ -19,6 +34,18 @@ final class Reader: ObservableObject {
     @Published var showControls = true
     @Published var immersive = false           // fullscreen, chrome hidden
     @Published var isDark = false
+    /// Translation mode: hover an ayah on the scan to read its English translation.
+    /// Uses the bundled scan-aligned word/ayah boxes (`MushafData`); the page image is unchanged.
+    @Published var translateMode = UserDefaults.standard.bool(forKey: "translateMode")
+    /// Memorization mode: hides each ayah's text on the scan; click an ayah to reveal it, or recite to
+    /// uncover it word by word.
+    @Published var memorizeMode = false
+    /// Ayahs ("surah:ayah") revealed whole in the current memorization session (clicked, or recited through).
+    @Published var revealed: Set<String> = []
+    /// How far into an ayah recitation has uncovered it so far ("surah:ayah" → engine word index).
+    @Published var revealedThrough: [String: Int] = [:]
+    /// The ayah hovered in Translation mode (drives the side translation card).
+    @Published var hover: AyahHover?
     @Published var bookmarks: Set<Int> = {
         let arr = UserDefaults.standard.array(forKey: "bookmarks") as? [Int] ?? []
         return Set(arr)
@@ -38,7 +65,52 @@ final class Reader: ObservableObject {
     func go(to page: Int) {
         currentPage = max(1, min(QuranData.totalPages, page))
         UserDefaults.standard.set(currentPage, forKey: "lastPage")   // restore on next launch
+        hover = nil
         PageStore.shared.prefetch(around: currentPage)
+    }
+
+    func toggleTranslate() {
+        translateMode.toggle()
+        if !translateMode { cancelClearHover(); hover = nil }
+        UserDefaults.standard.set(translateMode, forKey: "translateMode")
+    }
+
+    // MARK: hover persistence (so the translation bubble can be moused-over and interacted with)
+    private var clearWork: DispatchWorkItem?
+
+    func setHover(_ h: AyahHover) {
+        cancelClearHover()
+        if hover != h { hover = h }
+    }
+    /// Don't clear immediately — give the cursor time to travel onto the bubble.
+    func scheduleClearHover() {
+        clearWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.hover = nil }
+        clearWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+    }
+    func cancelClearHover() { clearWork?.cancel(); clearWork = nil }
+
+    func toggleMemorize() {
+        memorizeMode.toggle()
+        if !memorizeMode { revealed.removeAll(); revealedThrough.removeAll() }   // leaving the mode un-hides everything
+    }
+
+    /// Click handler in memorization mode: reveal (or re-hide) one whole ayah.
+    func toggleReveal(surah: Int, ayah: Int) {
+        let key = "\(surah):\(ayah)"
+        if revealed.contains(key) { revealed.remove(key); revealedThrough[key] = nil } else { revealed.insert(key) }
+    }
+    func reveal(surah: Int, ayah: Int) { revealed.insert("\(surah):\(ayah)") }
+    /// Uncover an ayah up to and including engine word `word` (never un-hides less than before).
+    func reveal(surah: Int, ayah: Int, through word: Int) {
+        let key = "\(surah):\(ayah)"
+        if word > revealedThrough[key, default: 0] { revealedThrough[key] = word }
+    }
+    /// A medallion shows only once its whole ayah is revealed.
+    func isRevealed(_ w: WordBox) -> Bool {
+        let key = "\(w.surah):\(w.ayah)"
+        return revealed.contains(key) || (!w.isMedallion && w.word <= revealedThrough[key, default: 0])
     }
 
     func next() { go(to: min(QuranData.totalPages, spread.right + 2)) }

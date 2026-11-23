@@ -8,6 +8,7 @@ let package = Package(
         .executableTarget(
             name: "Mushaf",
             path: "Sources/Mushaf",
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]

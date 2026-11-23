@@ -7,12 +7,19 @@ CONFIG="${1:-release}"
 echo "Building ($CONFIG)…"
 swift build -c "$CONFIG"
 
-BIN=$(swift build -c "$CONFIG" --show-bin-path)/Mushaf
+BIN_DIR=$(swift build -c "$CONFIG" --show-bin-path)
+BIN="$BIN_DIR/Mushaf"
 APP="$PWD/Mushaf.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Mushaf"
 cp design/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
+# SPM resource bundle (boxes.json, translations.json, tilawa-bridge.js).
+# Bundle.module finds it via Contents/Resources.
+if [ -d "$BIN_DIR/Mushaf_Mushaf.bundle" ]; then
+  cp -R "$BIN_DIR/Mushaf_Mushaf.bundle" "$APP/Contents/Resources/"
+fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -31,6 +38,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.reference</string>
+  <key>NSMicrophoneUsageDescription</key><string>Mushaf listens while you recite so it can follow along on the page and point out missed or changed words. Audio never leaves this Mac.</string>
 </dict>
 </plist>
 PLIST

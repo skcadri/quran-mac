@@ -14,7 +14,7 @@ struct ControlBar: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            navButton("chevron.right") { reader.prev() }   // RTL: right = backward
+            navButton("chevron.left") { reader.next() }    // RTL: left = forward
             bookmarkButton
 
             VStack(spacing: 3) {
@@ -30,7 +30,7 @@ struct ControlBar: View {
             }
 
             pageInfo
-            navButton("chevron.left") { reader.next() }    // RTL: left = forward
+            navButton("chevron.right") { reader.prev() }   // RTL: right = back
         }
         .padding(.horizontal, 22)
         .frame(height: 62)

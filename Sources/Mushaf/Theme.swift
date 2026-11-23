@@ -16,6 +16,9 @@ struct Palette {
     let readingBackground: Color
     let rowHover: Color
     let chip: Color
+    let pageCover: Color   // opaque cream that hides an ayah on the scan in memorization mode
+    let mistake: Color     // recitation mistakes in the UI (chips, labels)
+    let pageMark: Color    // recitation mistake underline drawn on the scan (paper is light in both themes)
 
     static let light = Palette(
         appBackground: Color(hex: 0xE9E4D8),
@@ -31,7 +34,10 @@ struct Palette {
         gold:          Color(hex: 0xB08B3E),
         readingBackground: Color(hex: 0xDDD6C6),
         rowHover:      Color(hex: 0xECE6D8),
-        chip:          Color(hex: 0xE7E1D2)
+        chip:          Color(hex: 0xE7E1D2),
+        pageCover:     Color(hex: 0xEDE7D6),
+        mistake:       Color(hex: 0x9B2C2C),
+        pageMark:      Color(hex: 0xB3261E)
     )
 
     static let dark = Palette(
@@ -48,7 +54,10 @@ struct Palette {
         gold:          Color(hex: 0xCFA84E),
         readingBackground: Color(hex: 0x100F0B),
         rowHover:      Color(hex: 0x2A281F),
-        chip:          Color(hex: 0x2C2A20)
+        chip:          Color(hex: 0x2C2A20),
+        pageCover:     Color(hex: 0xEDE7D6),   // the scan paper is light in both themes
+        mistake:       Color(hex: 0xE0786F),
+        pageMark:      Color(hex: 0xB3261E)
     )
 }
 

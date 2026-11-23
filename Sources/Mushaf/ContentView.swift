@@ -3,6 +3,7 @@ import AppKit
 
 struct ContentView: View {
     @StateObject private var reader = Reader()
+    @StateObject private var recitation = Recitation()
     @State private var window: NSWindow?
     @State private var revealChrome = false
     @State private var hideWork: DispatchWorkItem?
@@ -39,9 +40,10 @@ struct ContentView: View {
             }
         }
         .environmentObject(reader)
+        .environmentObject(recitation)
         .preferredColorScheme(reader.isDark ? .dark : .light)
         .background(WindowAccessor(
-            onWindow: { window = $0 },
+            onWindow: { window = $0; Debug.startSnapshots(window: $0) },
             onFullScreenChange: { full in
                 withAnimation(.easeInOut(duration: 0.25)) { reader.immersive = full }
                 if full { wake() }
@@ -52,10 +54,18 @@ struct ContentView: View {
         .onKeyPress(.leftArrow)  { reader.next(); return .handled }
         .onKeyPress(.rightArrow) { reader.prev(); return .handled }
         .onKeyPress(.space)      { reader.next(); return .handled }
+        .onKeyPress(keys: ["a"]) { _ in reader.next(); return .handled }   // RTL: left = forward
+        .onKeyPress(keys: ["d"]) { _ in reader.prev(); return .handled }   // RTL: right = back
         .onKeyPress(keys: ["f"]) { _ in window?.toggleFullScreen(nil); return .handled }
+        .onKeyPress(keys: ["r"]) { _ in recitation.toggle(); return .handled }
         .onAppear {
             PageStore.shared.prefetch(around: reader.currentPage)
             installScrollMonitor()
+            recitation.reader = reader
+            if !Debug.reciteFiles.isEmpty {
+                if Debug.env["MUSHAF_MEMORIZE"] != nil { reader.memorizeMode = true }
+                recitation.start()
+            }
         }
         .onDisappear {
             if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
@@ -76,6 +86,16 @@ struct ContentView: View {
             .font(.system(size: 13))
             Spacer()
             HStack(spacing: 4) {
+                iconButton("character.bubble", active: reader.translateMode) {
+                    withAnimation(.easeInOut(duration: 0.2)) { reader.toggleTranslate() }
+                }
+                iconButton("eye.slash", active: reader.memorizeMode) {
+                    withAnimation(.easeInOut(duration: 0.2)) { reader.toggleMemorize() }
+                }
+                iconButton(recitation.phase == .off ? "mic" : "mic.fill", active: recitation.phase != .off) {
+                    recitation.toggle()
+                }
+                .help("Recite (R)")
                 iconButton("sidebar.left", active: reader.showSidebar) {
                     withAnimation(.easeInOut(duration: 0.25)) { reader.showSidebar.toggle() }
                 }
@@ -111,10 +131,11 @@ struct ContentView: View {
             .padding(.top, 12)
             Spacer()
             HStack(spacing: 16) {
-                floatButton("chevron.right") { reader.prev() }
+                floatButton("chevron.left") { reader.next() }   // RTL: left = forward
                 floatButton(reader.isBookmarked ? "star.fill" : "star") { reader.toggleBookmark() }
+                floatButton(recitation.phase == .off ? "mic" : "mic.fill") { recitation.toggle() }
                 floatButton("arrow.down.right.and.arrow.up.left") { window?.toggleFullScreen(nil) }
-                floatButton("chevron.left") { reader.next() }
+                floatButton("chevron.right") { reader.prev() }  // RTL: right = back
             }
             .padding(10)
             .background(.ultraThinMaterial, in: Capsule())
